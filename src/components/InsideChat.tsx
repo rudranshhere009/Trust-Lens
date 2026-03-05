@@ -69,7 +69,9 @@ export const InsideChat = ({ mode }: InsideChatProps) => {
   const [attachedAsset, setAttachedAsset] = useState<AttachedAsset | null>(null);
   const [assetRefreshTick, setAssetRefreshTick] = useState(0);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  const [copiedChat, setCopiedChat] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const threads = useMemo(
     () => store.threads.filter((t) => t.track === mode).sort((a, b) => b.updatedAt - a.updatedAt),
@@ -87,6 +89,10 @@ export const InsideChat = ({ mode }: InsideChatProps) => {
       window.removeEventListener("storage", refresh);
     };
   }, []);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [activeThread?.id, activeThread?.messages.length, isReplying]);
 
   const assets = useMemo(() => {
     const all = loadInsideDocuments().documents.sort((a, b) => b.uploadedAt - a.uploadedAt);
@@ -119,6 +125,13 @@ export const InsideChat = ({ mode }: InsideChatProps) => {
   const removeThread = (id: string) => {
     sync((current) => ({ ...current, threads: current.threads.filter((t) => t.id !== id) }));
     if (activeThreadId === id) setActiveThreadId(null);
+  };
+
+  const clearAllThreadsForMode = () => {
+    sync((current) => ({ ...current, threads: current.threads.filter((t) => t.track !== mode) }));
+    setActiveThreadId(null);
+    setAttachedAsset(null);
+    setInput("");
   };
 
   const toAttachedAsset = (doc: InsideDocumentRecord): AttachedAsset => ({
@@ -244,6 +257,20 @@ export const InsideChat = ({ mode }: InsideChatProps) => {
     URL.revokeObjectURL(url);
   };
 
+  const copyActiveThread = async () => {
+    if (!activeThread) return;
+    const transcript = activeThread.messages
+      .map((m) => `${m.role === "user" ? "You" : "Assistant"}: ${m.content}`)
+      .join("\n\n");
+    try {
+      await navigator.clipboard.writeText(transcript);
+      setCopiedChat(true);
+      window.setTimeout(() => setCopiedChat(false), 1200);
+    } catch {
+      // no-op
+    }
+  };
+
   const formatThreadTime = (ts: number) =>
     new Date(ts).toLocaleString([], {
       year: "numeric",
@@ -260,10 +287,15 @@ export const InsideChat = ({ mode }: InsideChatProps) => {
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center justify-between text-base">
               <span className="min-w-0 pr-2 leading-tight text-[1.1rem] truncate">{TRACK_LABEL[mode]}</span>
-              <Button size="sm" variant="outline" onClick={newThread}>
-                <Plus className="h-4 w-4 mr-1" />
-                New
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="outline" onClick={newThread}>
+                  <Plus className="h-4 w-4 mr-1" />
+                  New
+                </Button>
+                <Button size="sm" variant="ghost" onClick={clearAllThreadsForMode} disabled={threads.length === 0}>
+                  Clear All
+                </Button>
+              </div>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
@@ -291,8 +323,13 @@ export const InsideChat = ({ mode }: InsideChatProps) => {
               <span className="flex items-center gap-2">
                 <Bot className="h-5 w-5" />
                 {activeThread?.title || "Conversation"}
+                {activeThread ? <span className="text-xs text-muted-foreground">({activeThread.messages.length})</span> : null}
               </span>
               <div className="flex items-center gap-2">
+                <Button size="sm" variant="outline" onClick={() => void copyActiveThread()} disabled={!activeThread}>
+                  <Copy className="h-4 w-4 mr-1" />
+                  {copiedChat ? "Copied" : "Copy Chat"}
+                </Button>
                 <Button size="sm" variant="outline" onClick={exportActiveThread} disabled={!activeThread}>
                   <Download className="h-4 w-4 mr-1" />
                   Export
@@ -304,8 +341,11 @@ export const InsideChat = ({ mode }: InsideChatProps) => {
               </div>
             </CardTitle>
             {attachedAsset ? (
-              <div className="text-xs text-muted-foreground rounded border px-2 py-1 mt-2">
-                Attached: {attachedAsset.name} | {attachedAsset.summary}
+              <div className="text-xs text-muted-foreground rounded border px-2 py-1 mt-2 flex items-center justify-between gap-2">
+                <span className="truncate">Attached: {attachedAsset.name} | {attachedAsset.summary}</span>
+                <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => setAttachedAsset(null)}>
+                  Clear
+                </Button>
               </div>
             ) : null}
           </CardHeader>
@@ -336,6 +376,13 @@ export const InsideChat = ({ mode }: InsideChatProps) => {
                       {copiedMessageId === m.id ? <div className="text-[11px] mt-2 opacity-80">Copied</div> : null}
                     </div>
                   ))}
+                  {isReplying ? (
+                    <div className="rounded-md p-3 text-sm whitespace-pre-wrap bg-muted mr-10">
+                      <div className="text-xs opacity-80 mb-1">Assistant</div>
+                      Assistant is thinking...
+                    </div>
+                  ) : null}
+                  <div ref={messagesEndRef} />
                 </div>
               )}
             </ScrollArea>
