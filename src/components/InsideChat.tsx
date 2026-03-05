@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Bot, FileText, Image as ImageIcon, Paperclip, Plus, Send, Trash2 } from "lucide-react";
+import { Bot, Copy, Download, FileText, Image as ImageIcon, Paperclip, Plus, Send, Trash2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +35,12 @@ const TRACK_LABEL: Record<AppTrack, string> = {
   truthdesk: "AI Assistant",
 };
 
+const QUICK_PROMPTS: Record<AppTrack, string[]> = {
+  legal: ["Summarize legal risk", "Key liabilities?", "Draft next legal steps"],
+  compliance: ["Check compliance gaps", "Top policy risks", "Required controls list"],
+  truthdesk: ["Is this claim true?", "What evidence is missing?", "Summarize in 5 bullets"],
+};
+
 const createDefaultThread = (mode: AppTrack): ChatThread => {
   const now = Date.now();
   return {
@@ -62,6 +68,7 @@ export const InsideChat = ({ mode }: InsideChatProps) => {
   const [assetDialogOpen, setAssetDialogOpen] = useState(false);
   const [attachedAsset, setAttachedAsset] = useState<AttachedAsset | null>(null);
   const [assetRefreshTick, setAssetRefreshTick] = useState(0);
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const threads = useMemo(
@@ -204,6 +211,39 @@ export const InsideChat = ({ mode }: InsideChatProps) => {
     }
   };
 
+  const copyMessage = async (id: string, content: string) => {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopiedMessageId(id);
+      window.setTimeout(() => {
+        setCopiedMessageId((current) => (current === id ? null : current));
+      }, 1200);
+    } catch {
+      // no-op
+    }
+  };
+
+  const exportActiveThread = () => {
+    if (!activeThread) return;
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      track: mode,
+      title: activeThread.title,
+      attachedAsset,
+      messages: activeThread.messages,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const safe = (activeThread.title || "chat").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+    a.href = url;
+    a.download = `${safe || "chat"}-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
   const formatThreadTime = (ts: number) =>
     new Date(ts).toLocaleString([], {
       year: "numeric",
@@ -252,10 +292,16 @@ export const InsideChat = ({ mode }: InsideChatProps) => {
                 <Bot className="h-5 w-5" />
                 {activeThread?.title || "Conversation"}
               </span>
-              <Button size="sm" variant="outline" onClick={() => setAssetDialogOpen(true)}>
-                <Paperclip className="h-4 w-4 mr-1" />
-                From Files
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="outline" onClick={exportActiveThread} disabled={!activeThread}>
+                  <Download className="h-4 w-4 mr-1" />
+                  Export
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setAssetDialogOpen(true)}>
+                  <Paperclip className="h-4 w-4 mr-1" />
+                  From Files
+                </Button>
+              </div>
             </CardTitle>
             {attachedAsset ? (
               <div className="text-xs text-muted-foreground rounded border px-2 py-1 mt-2">
@@ -274,14 +320,43 @@ export const InsideChat = ({ mode }: InsideChatProps) => {
                       key={m.id}
                       className={`rounded-md p-3 text-sm whitespace-pre-wrap ${m.role === "user" ? "bg-primary text-primary-foreground ml-10" : "bg-muted mr-10"}`}
                     >
-                      <div className="text-xs opacity-80 mb-1">{m.role === "user" ? "You" : "Assistant"}</div>
+                      <div className="text-xs opacity-80 mb-1 flex items-center justify-between gap-2">
+                        <span>{m.role === "user" ? "You" : "Assistant"}</span>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-6 w-6"
+                          onClick={() => void copyMessage(m.id, m.content)}
+                          title="Copy message"
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                       {m.content}
+                      {copiedMessageId === m.id ? <div className="text-[11px] mt-2 opacity-80">Copied</div> : null}
                     </div>
                   ))}
                 </div>
               )}
             </ScrollArea>
           </CardContent>
+          <div className="px-3 pt-2 flex flex-wrap gap-2 border-t">
+            {QUICK_PROMPTS[mode].map((prompt) => (
+              <Button
+                key={prompt}
+                type="button"
+                size="sm"
+                variant="secondary"
+                className="h-7 text-xs"
+                onClick={() => {
+                  setInput(prompt);
+                  inputRef.current?.focus();
+                }}
+              >
+                {prompt}
+              </Button>
+            ))}
+          </div>
           <div className="border-t p-3 flex gap-2">
             <Input
               ref={inputRef}
