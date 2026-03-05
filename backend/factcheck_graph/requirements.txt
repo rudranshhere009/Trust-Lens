@@ -4,3 +4,4 @@ langchain==0.3.14
 langgraph==0.2.61
 requests==2.32.3
 pydantic==2.10.4
+python-dotenv==1.0.1

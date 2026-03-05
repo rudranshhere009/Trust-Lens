@@ -5,6 +5,7 @@ import time
 import uuid
 import os
 import xml.etree.ElementTree as ET
+from pathlib import Path
 from dataclasses import dataclass
 from typing import Any, Dict, List, Literal, Optional, TypedDict
 from urllib.parse import quote, urlparse
@@ -14,6 +15,10 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from langgraph.graph import END, StateGraph
+from dotenv import load_dotenv
+
+
+load_dotenv(dotenv_path=Path(__file__).with_name(".env"), override=False)
 
 
 class RunRequest(BaseModel):

@@ -20,6 +20,31 @@ or from npm script:
 npm run factcheck:api
 ```
 
+## Groq API Key Setup
+
+The assistant chat endpoint is already wired to Groq.
+
+1. Copy:
+
+```bash
+backend/factcheck_graph/.env.example
+```
+
+to:
+
+```bash
+backend/factcheck_graph/.env
+```
+
+2. Paste your key in `backend/factcheck_graph/.env`:
+
+```bash
+GROQ_API_KEY=your_real_groq_api_key
+GROQ_MODEL=llama-3.1-8b-instant
+```
+
+The backend auto-loads this `.env` file on startup.
+
 ## Frontend Integration
 
 Set optional env var:
@@ -41,4 +66,5 @@ By default, browser fallback is disabled so CORS-blocked public endpoints do not
 Endpoint used:
 
 - `POST /api/factcheck/run`
+- `POST /api/factcheck/chat` (Groq chat completions)
 - `GET /health`
