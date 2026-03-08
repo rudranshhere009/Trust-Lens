@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
 import type { AppTrack } from "@/utils/insideData";
 import {
   createFactChatId,
@@ -45,6 +46,7 @@ import {
   type SearchEvidence,
 } from "@/utils/externalServices";
 import { runFactcheckGraphApi } from "@/utils/factcheckGraphApi";
+import { consumeDemoUpload, getDemoUploadsRemaining, isDemoModeActive, logDemoEvent } from "@/utils/demoMode";
 
 interface InsideFactCheckProps {
   mode: AppTrack;
@@ -733,6 +735,7 @@ const answerFromEvidence = (question: string, research: FactResearchResult): Fac
 };
 
 export const InsideFactCheck = ({ mode }: InsideFactCheckProps) => {
+  const { toast } = useToast();
   const [store, setStore] = useState(() => loadInsideFactStore());
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [inputType, setInputType] = useState<FactInputType>("url");
@@ -745,6 +748,7 @@ export const InsideFactCheck = ({ mode }: InsideFactCheckProps) => {
   const [overlayLockedSessionId, setOverlayLockedSessionId] = useState<string | null>(null);
   const filePickerRef = useRef<HTMLInputElement | null>(null);
   const cancelledSessionsRef = useRef<Set<string>>(new Set());
+  const demoUploadsLeft = isDemoModeActive() ? Math.max(0, getDemoUploadsRemaining()) : null;
 
   const sync = (updater: Parameters<typeof updateInsideFactStore>[0]) => {
     const next = updateInsideFactStore(updater);
@@ -1205,15 +1209,32 @@ export const InsideFactCheck = ({ mode }: InsideFactCheckProps) => {
   const startResearch = () => {
     const now = Date.now();
     if (sessions.some((x) => x.status === "researching")) return;
-    const rawInput = inputType === "url" ? normalize(urlInput) : uploadFile?.name || "";
+    const fileForRun = uploadFile;
+    const rawInput = inputType === "url" ? normalize(urlInput) : fileForRun?.name || "";
     if (inputType === "url" && !rawInput) return;
-    if ((inputType === "image" || inputType === "document") && !uploadFile) return;
+    if ((inputType === "image" || inputType === "document") && !fileForRun) return;
+
+    if ((inputType === "image" || inputType === "document") && fileForRun && isDemoModeActive()) {
+      const consume = consumeDemoUpload("fact-check", fileForRun.name);
+      if (!consume.allowed) {
+        toast({
+          title: consume.reason === "expired" ? "Demo session expired" : "Demo upload limit reached",
+          description:
+            consume.reason === "expired"
+              ? "Your demo session has ended. Start Demo Mode again from welcome page."
+              : "Demo Mode allows only one total file upload.",
+          variant: "destructive",
+        });
+        return;
+      }
+      logDemoEvent("upload_started", `Fact-check upload started in demo mode: ${fileForRun.name}`);
+    }
 
     const sessionId = createFactChatId();
     const titleSource =
       inputType === "url"
         ? rawInput
-        : uploadFile?.name || (inputType === "image" ? "Image evidence" : "Document evidence");
+        : fileForRun?.name || (inputType === "image" ? "Image evidence" : "Document evidence");
 
     const session: FactSession = {
       id: sessionId,
@@ -1231,8 +1252,8 @@ export const InsideFactCheck = ({ mode }: InsideFactCheckProps) => {
             inputType === "url"
               ? `Research this URL: ${rawInput}`
               : inputType === "image"
-                ? `Research this uploaded image: ${uploadFile?.name}`
-                : `Research this uploaded document: ${uploadFile?.name}`,
+                ? `Research this uploaded image: ${fileForRun?.name}`
+                : `Research this uploaded document: ${fileForRun?.name}`,
           createdAt: now,
         },
         {
@@ -1257,7 +1278,7 @@ export const InsideFactCheck = ({ mode }: InsideFactCheckProps) => {
     setUrlInput("");
     setContextInput("");
     setUploadFile(null);
-    void runResearchPipeline(sessionId, inputType, rawInput, uploadFile, contextInput);
+    void runResearchPipeline(sessionId, inputType, rawInput, fileForRun, contextInput);
   };
 
   const askQuestion = () => {
@@ -1484,6 +1505,9 @@ export const InsideFactCheck = ({ mode }: InsideFactCheckProps) => {
                           ? "Supported: PNG, JPG, JPEG, WEBP, BMP, GIF"
                           : "Supported: PDF, TXT, MD, CSV, JSON, DOC, DOCX, RTF"}
                     </div>
+                    {demoUploadsLeft !== null ? (
+                      <div className="text-xs text-cyan-300">Demo upload limit: {demoUploadsLeft} remaining</div>
+                    ) : null}
                   </div>
                   <div className="flex items-center gap-2">
                     <Button type="button" variant="outline" onClick={() => filePickerRef.current?.click()}>

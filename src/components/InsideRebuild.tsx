@@ -10,6 +10,7 @@ import { InsideChat } from "@/components/InsideChat";
 import { InsideInfantry } from "@/components/InsideInfantry";
 import { InsideProfile } from "@/components/InsideProfile";
 import { InsideSettings } from "@/components/InsideSettings";
+import { getDemoLogs, getDemoModeState, getDemoUploadsRemaining } from "@/utils/demoMode";
 
 type AppTrack = "legal" | "compliance" | "truthdesk";
 type TabId = "dashboard" | "documents" | "misinformation" | "chat" | "infantry" | "resources";
@@ -187,6 +188,12 @@ const STORAGE_KEY = "trustlens_inside_mode";
 
 export const InsideRebuild = ({ activeTab }: InsideRebuildProps) => {
   const mode = ((localStorage.getItem(STORAGE_KEY) as AppTrack) || "legal") as AppTrack;
+  const demoState = getDemoModeState();
+  const demoActive = Boolean(demoState?.active && demoState.expiresAt > Date.now());
+  const demoUploadsRemaining = demoActive ? getDemoUploadsRemaining() : 0;
+  const demoLogs = demoActive ? getDemoLogs(5) : [];
+  const demoRemainingMs = demoActive ? Math.max(0, demoState!.expiresAt - Date.now()) : 0;
+  const demoRemainingLabel = `${Math.floor(demoRemainingMs / 60000)}:${String(Math.floor((demoRemainingMs % 60000) / 1000)).padStart(2, "0")}`;
 
   const safeTab: TabId = (SECTION_PLAN[activeTab as TabId] ? activeTab : "dashboard") as TabId;
   const current = useMemo(() => SECTION_PLAN[safeTab][mode], [safeTab, mode]);
@@ -213,10 +220,34 @@ export const InsideRebuild = ({ activeTab }: InsideRebuildProps) => {
       {safeTab === "chat" ? <InsideChat mode={mode} /> : null}
       {safeTab === "infantry" ? <InsideInfantry mode={mode} /> : null}
       {safeTab === "resources" ? (
-        <div className="space-y-6">
-          <InsideProfile mode={mode} />
-          <InsideSettings />
-        </div>
+        demoActive ? (
+          <Card className="dashboard-card-effect border-cyan-500/40 bg-cyan-500/10">
+            <CardHeader>
+              <CardTitle>Resources Locked In Demo Mode</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Profile and Settings are intentionally disabled in demo mode. This keeps the preview focused and secure.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="outline">Time Left {demoRemainingLabel}</Badge>
+                <Badge variant="outline">Uploads Left {Math.max(0, demoUploadsRemaining)}</Badge>
+              </div>
+              <div className="space-y-1">
+                {demoLogs.map((entry) => (
+                  <div key={entry.id} className="text-xs text-muted-foreground">
+                    {new Date(entry.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })} - {entry.message}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-6">
+            <InsideProfile mode={mode} />
+            <InsideSettings />
+          </div>
+        )
       ) : null}
 
       {safeTab !== "dashboard" &&

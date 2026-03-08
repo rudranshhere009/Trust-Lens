@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
 import {
   Sheet,
   SheetContent,
@@ -24,6 +25,7 @@ import type { AppTrack } from "@/utils/insideData";
 import { loadInsideDocuments, updateInsideDocuments, type InsideDocumentRecord } from "@/utils/insideDocumentsData";
 import { SECTION_ACTION_EVENT, isSectionActionDetail } from "@/utils/sectionActionEvents";
 import { analyzeCanvasForensics, computeAuthenticity, getDocumentMetadataFlags, readDataUrlBytes, sha256Hex, type ForensicBreakdown, type ForensicHotspot, type ForensicMetadataFlag } from "@/utils/forensicLab";
+import { consumeDemoUpload, getDemoUploadsRemaining, isDemoModeActive, logDemoEvent } from "@/utils/demoMode";
 
 interface InsideDocumentsProps {
   mode: AppTrack;
@@ -525,6 +527,7 @@ const runWithConcurrency = async <T,>(items: T[], limit: number, worker: (item: 
 };
 
 export const InsideDocuments = ({ mode }: InsideDocumentsProps) => {
+  const { toast } = useToast();
   const [store, setStore] = useState(() => loadInsideDocuments());
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -601,8 +604,44 @@ export const InsideDocuments = ({ mode }: InsideDocumentsProps) => {
 
   const handleUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
-    const candidates = Array.from(files).filter((file) => isSupportedUploadFile(file));
+    let candidates = Array.from(files).filter((file) => isSupportedUploadFile(file));
     if (candidates.length === 0) return;
+    const demoActive = isDemoModeActive();
+
+    if (demoActive) {
+      const remaining = getDemoUploadsRemaining();
+      if (remaining <= 0) {
+        logDemoEvent("upload_blocked", "Document upload blocked. Demo upload limit reached.");
+        toast({
+          title: "Demo upload limit reached",
+          description: "Demo Mode allows only one total file upload.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (candidates.length > 1) {
+        toast({
+          title: "Demo Mode restriction",
+          description: "Only the first selected file will be uploaded in Demo Mode.",
+        });
+      }
+
+      candidates = [candidates[0]];
+      const consume = consumeDemoUpload("documents", candidates[0].name);
+      if (!consume.allowed) {
+        toast({
+          title: consume.reason === "expired" ? "Demo session expired" : "Demo upload limit reached",
+          description:
+            consume.reason === "expired"
+              ? "Your demo session has ended. Start Demo Mode again from welcome page."
+              : "Demo Mode allows only one total file upload.",
+          variant: "destructive",
+        });
+        return;
+      }
+      logDemoEvent("upload_started", `Document upload started in demo mode: ${candidates[0].name}`);
+    }
 
     const queued = candidates.map((file) => ({
       id: createId(),
@@ -668,6 +707,9 @@ export const InsideDocuments = ({ mode }: InsideDocumentsProps) => {
                 : d
             ),
           }));
+          if (demoActive) {
+            logDemoEvent("upload_completed", `Document analysis completed for ${file.name}.`);
+          }
         } catch {
           sync((current) => ({
             ...current,
@@ -685,6 +727,9 @@ export const InsideDocuments = ({ mode }: InsideDocumentsProps) => {
                 : d
             ),
           }));
+          if (demoActive) {
+            logDemoEvent("upload_failed", `Document analysis failed for ${file.name}.`);
+          }
         } finally {
           setProcessingDocIds((current) => current.filter((x) => x !== id));
           setAnalysisProgress((current) => ({ ...current, done: Math.min(current.total, current.done + 1) }));
@@ -1404,6 +1449,11 @@ export const InsideDocuments = ({ mode }: InsideDocumentsProps) => {
             }}
           />
           <p className="text-xs text-muted-foreground">Supports TXT, PDF, PNG, JPG, WEBP, ZIP. ZIP files are scanned with strict pre-extraction cyber checks.</p>
+          {isDemoModeActive() ? (
+            <p className="text-xs text-cyan-300">
+              Demo Mode: 1 total file upload allowed. Remaining uploads: {Math.max(0, getDemoUploadsRemaining())}.
+            </p>
+          ) : null}
         </CardContent>
       </Card>
 
