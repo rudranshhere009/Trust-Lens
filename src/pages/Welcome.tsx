@@ -1,26 +1,9 @@
-import MatrixBackground from '../components/MatrixBackground';
 import { useNavigate } from 'react-router-dom';
+import MatrixBackground from '../components/MatrixBackground';
 import { Button } from '@/components/ui/button';
-import { Lock, TimerReset, UploadCloud } from "lucide-react";
-import { startDemoMode } from "@/utils/demoMode";
 
 const WelcomePage = () => {
   const navigate = useNavigate();
-
-  const launchDemoMode = () => {
-    startDemoMode();
-    localStorage.setItem(
-      "userProfile",
-      JSON.stringify({
-        name: "Demo Analyst",
-        email: "demo@trustlens.local",
-        photoUrl: "",
-        faceVerified: false,
-        demoMode: true,
-      })
-    );
-    navigate("/app?tab=dashboard");
-  };
 
   return (
     <div className="relative min-h-[100dvh] w-full overflow-x-hidden overflow-y-auto font-space-grotesk">
@@ -51,39 +34,6 @@ const WelcomePage = () => {
               Get Started
             </Button>
           </div>
-
-          <section className="mt-5 rounded-lg border border-cyan-400/40 bg-cyan-500/5 p-4">
-            <div className="text-sm font-semibold text-cyan-200">Demo Mode Preview</div>
-            <p className="mt-1 text-xs leading-relaxed text-cyan-100/90">
-              Demo Mode gives a guided hands-on overview of TrustLens workflows with controlled limits so users can quickly evaluate the platform behavior.
-            </p>
-            <div className="mt-2 rounded-md border border-cyan-300/30 bg-cyan-400/10 p-2 text-xs text-cyan-100/90">
-              Explore a full preview of Dashboard signals, Document forensics intake, Fact-check pipeline, AI assistant behavior, and Infantry remediation flow with live demo activity logging.
-            </div>
-            <div className="mt-3 grid gap-2 text-xs text-cyan-100/90 sm:grid-cols-3">
-              <div className="rounded-md border border-cyan-300/30 bg-cyan-400/10 p-2 flex items-center gap-2">
-                <TimerReset className="h-3.5 w-3.5" />
-                6-minute session
-              </div>
-              <div className="rounded-md border border-cyan-300/30 bg-cyan-400/10 p-2 flex items-center gap-2">
-                <UploadCloud className="h-3.5 w-3.5" />
-                1 file upload total
-              </div>
-              <div className="rounded-md border border-cyan-300/30 bg-cyan-400/10 p-2 flex items-center gap-2">
-                <Lock className="h-3.5 w-3.5" />
-                Settings/Profile locked
-              </div>
-            </div>
-            <div className="mt-3 flex justify-center">
-              <Button
-                size="sm"
-                onClick={launchDemoMode}
-                className="rounded-full bg-cyan-600 px-4 text-xs font-semibold text-white shadow-lg shadow-cyan-500/40 transition-all duration-300 hover:scale-105 hover:bg-cyan-500"
-              >
-                Launch Demo Mode
-              </Button>
-            </div>
-          </section>
         </div>
       </main>
     </div>
